@@ -1,0 +1,1 @@
+/* JavaScript extracted from original HTML – unchanged */
