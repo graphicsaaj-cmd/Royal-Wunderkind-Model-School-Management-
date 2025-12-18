@@ -251,22 +251,10 @@ button.load-btn {
   background: #6c757d;
 }
 .auto-save-notice {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #d4edda;
-  color: #155724;
-  padding: 10px 20px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  font-size: 14px;
-  opacity: 0;
-  transition: opacity 0.5s;
-  z-index: 1000;
-}
-.auto-save-notice.show {
-  opacity: 1;
+  text-align: center;
+  font-size: 12px;
+  color: green;
+  margin: 10px 0;
 }
 #settingsModal {
   display: none;
@@ -477,14 +465,11 @@ button.load-btn {
   </div>
 </div>
 
-<!-- Auto-save Notice -->
-<div id="autoSaveNotice" class="auto-save-notice">✓ Auto-saved</div>
-
 <!-- Settings Modal -->
 <div id="settingsModal">
   <div class="modal-content">
     <h3>GitHub Settings</h3>
-    <p>To save/load/auto-save results & receipts from anywhere, enter a GitHub Personal Access Token (with <strong>gist</strong> scope):</p>
+    <p>To save/load results & receipts from anywhere, enter a GitHub Personal Access Token (with <strong>gist</strong> scope):</p>
     <input type="password" id="githubToken" placeholder="ghp_xxxxxxxx" style="width:100%; padding:8px;">
     <div style="margin-top:10px;">
       <button onclick="saveGitHubToken()" style="background:#28a745;">Save Token</button>
@@ -498,14 +483,10 @@ button.load-btn {
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-// GitHub & Storage
-const GIST_ID_RESULTS = 'results_storage';
-const GIST_ID_RECEIPTS = 'receipts_storage';
+// GitHub Gist storage
+const GIST_ID_RESULTS = 'results_storage'; // one gist for all results
+const GIST_ID_RECEIPTS = 'receipts_storage'; // one gist for all receipts
 let githubToken = localStorage.getItem('githubToken') || '';
-
-// Auto-save variables
-let autoSaveInterval = null;
-const AUTO_SAVE_DELAY = 30000; // 30 seconds
 
 // Settings modal
 function openSettings() {
@@ -523,93 +504,198 @@ function saveGitHubToken() {
     alert('GitHub token saved!');
   }
   closeSettings();
-  startAutoSaveIfNeeded();
 }
 
-// Gist helpers (same as before)
+// Gist helpers
 async function getGist(id) {
-  if (!githubToken) return null;
+  if (!githubToken) { alert('Please set GitHub token in Settings first!'); return null; }
   const res = await fetch(`https://api.github.com/gists/${id}`, {
     headers: { Authorization: `token ${githubToken}` }
   });
   if (res.status === 404) return null;
-  if (!res.ok) { console.error('Gist error:', await res.text()); return null; }
+  if (!res.ok) { alert('GitHub error: ' + await res.text()); return null; }
   return await res.json();
 }
 async function createOrUpdateGist(id, description, files) {
-  if (!githubToken) return null;
+  if (!githubToken) { alert('Please set GitHub token in Settings first!'); return null; }
   const existing = await getGist(id);
   const method = existing ? 'PATCH' : 'POST';
   const url = existing ? `https://api.github.com/gists/${id}` : 'https://api.github.com/gists';
+  const body = {
+    description,
+    public: false,
+    files
+  };
+  if (existing) body.gist_id = id;
   const res = await fetch(url, {
     method,
     headers: { Authorization: `token ${githubToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description, public: false, files, ...(existing ? {gist_id: id} : {}) })
+    body: JSON.stringify(body)
   });
-  if (!res.ok) { console.error('Save error:', await res.text()); return null; }
-  return await res.json();
+  if (!res.ok) { alert('GitHub save error: ' + await res.text()); return null; }
+  const data = await res.json();
+  return data.id;
 }
+
+// Load all saved results/receipts index
 async function loadAllResults() {
   const gist = await getGist(GIST_ID_RESULTS);
-  return gist && gist.files['index.json'] ? JSON.parse(gist.files['index.json'].content) : {};
+  if (!gist || !gist.files['index.json']) return {};
+  return JSON.parse(gist.files['index.json'].content);
 }
 async function loadAllReceipts() {
   const gist = await getGist(GIST_ID_RECEIPTS);
-  return gist && gist.files['index.json'] ? JSON.parse(gist.files['index.json'].content) : {};
+  if (!gist || !gist.files['index.json']) return {};
+  return JSON.parse(gist.files['index.json'].content);
 }
+
+// Save individual result/receipt
 async function saveToGist(collectionId, indexKey, data) {
   const index = await (collectionId === GIST_ID_RESULTS ? loadAllResults() : loadAllReceipts());
   index[indexKey] = data;
-  await createOrUpdateGist(collectionId, 'School results/receipts storage', {'index.json': {content: JSON.stringify(index)}});
+  const files = {
+    'index.json': { content: JSON.stringify(index) }
+  };
+  await createOrUpdateGist(collectionId, 'School results/receipts storage', files);
 }
 
-// Auto-save functions
-function showAutoSaveNotice() {
-  const notice = document.getElementById('autoSaveNotice');
-  notice.classList.add('show');
-  setTimeout(() => notice.classList.remove('show'), 2000);
-}
-async function autoSaveActiveTab() {
-  const activeTab = document.querySelector('.tab-content.active').id;
-  if (activeTab === 'result') {
-    const id = document.getElementById('studentID').value.trim();
-    if (id && document.getElementById('resultName').value.trim()) {
-      const data = getCurrentResultData();
-      await saveToGist(GIST_ID_RESULTS, id, data);
-      showAutoSaveNotice();
-    }
-  } else if (activeTab === 'receipt') {
-    const id = document.getElementById('receiptID').value.trim();
-    if (id && document.getElementById('receiptName').value.trim()) {
-      const data = getCurrentReceiptData();
-      await saveToGist(GIST_ID_RECEIPTS, id, data);
-      showAutoSaveNotice();
-    }
-  }
-}
-function startAutoSaveIfNeeded() {
-  if (autoSaveInterval) clearInterval(autoSaveInterval);
-  if (githubToken) {
-    autoSaveInterval = setInterval(autoSaveActiveTab, AUTO_SAVE_DELAY);
-  }
-}
-function stopAutoSave() {
-  if (autoSaveInterval) {
-    clearInterval(autoSaveInterval);
-    autoSaveInterval = null;
-  }
+// Load individual
+async function loadFromGist(collectionId, key) {
+  const index = await (collectionId === GIST_ID_RESULTS ? loadAllResults() : loadAllReceipts());
+  return index[key] || null;
 }
 
-// Manual save functions (unchanged, but now also restart auto-save)
+// School header & images (still localStorage – small data)
+const STORAGE_KEY_LOGO = 'schoolLogo';
+const STORAGE_KEY_SIG_CLASS = 'sigClass';
+const STORAGE_KEY_SIG_HEAD = 'sigHead';
+const STORAGE_KEY_SIG_FINANCE = 'sigFinance';
+const STORAGE_KEY_SIG_STAMP = 'sigStamp';
+const STORAGE_KEY_SCHOOL_INFO = 'schoolHeaderInfo';
+
+function saveSchoolHeader() {
+  const info = {
+    name: document.getElementById('schoolName').innerText.trim(),
+    motto: document.getElementById('schoolMotto').innerText.trim(),
+    address: document.getElementById('schoolAddress').innerText.trim(),
+    phone: document.getElementById('schoolPhone').innerText.trim(),
+    email: document.getElementById('schoolEmail').innerText.trim(),
+    website: document.getElementById('schoolWebsite').innerText.trim()
+  };
+  localStorage.setItem(STORAGE_KEY_SCHOOL_INFO, JSON.stringify(info));
+}
+function loadSchoolHeader() {
+  const saved = localStorage.getItem(STORAGE_KEY_SCHOOL_INFO);
+  if (saved) {
+    const info = JSON.parse(saved);
+    document.getElementById('schoolName').innerText = info.name;
+    document.getElementById('schoolMotto').innerText = info.motto;
+    document.getElementById('schoolAddress').innerText = info.address;
+    document.getElementById('schoolPhone').innerText = info.phone;
+    document.getElementById('schoolEmail').innerText = info.email;
+    document.getElementById('schoolWebsite').innerText = info.website;
+  }
+}
+['schoolName','schoolMotto','schoolAddress','schoolPhone','schoolEmail','schoolWebsite'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('blur', saveSchoolHeader);
+});
+
+// Signature functions
+function previewSignature(e, key) {
+  const file = e.target.files[0];
+  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    localStorage.setItem(key, ev.target.result);
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    const container = e.target.parentElement.querySelector('.signature-upload');
+    container.innerHTML = '<button class="signature-delete" onclick="deleteSignature(event, \'' + key + '\')">×</button>';
+    container.appendChild(img);
+  };
+  reader.readAsDataURL(file);
+}
+function deleteSignature(e, key) {
+  e.stopPropagation();
+  localStorage.removeItem(key);
+  const container = e.target.parentElement;
+  container.innerHTML = 'Click to upload<button class="signature-delete" style="display:none"></button>';
+}
+function loadImages() {
+  const logo = localStorage.getItem(STORAGE_KEY_LOGO);
+  if (logo) {
+    const img = document.createElement('img');
+    img.src = logo;
+    document.querySelector('.school-logo').innerHTML = '';
+    document.querySelector('.school-logo').appendChild(img);
+  }
+  const sigMap = {
+    sigClass: 'classSigInput',
+    sigHead: 'headSigInput',
+    sigFinance: 'financeInput',
+    sigStamp: 'stampInput'
+  };
+  Object.keys(sigMap).forEach(key => {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const img = document.createElement('img');
+      img.src = data;
+      const container = document.getElementById(sigMap[key]).parentElement.querySelector('.signature-upload');
+      container.innerHTML = '<button class="signature-delete" onclick="deleteSignature(event, \'' + key + '\')">×</button>';
+      container.appendChild(img);
+    }
+  });
+}
+
+// Result functions
+function clearResultForm() {
+  document.getElementById('resultName').value = '';
+  document.getElementById('resultAdmNo').value = '';
+  document.getElementById('resultClass').value = '';
+  document.getElementById('resultNoInClass').value = '';
+  document.getElementById('resultPresent').value = '';
+  document.getElementById('resultAbsent').value = '';
+  document.getElementById('teacherComment').value = '';
+  document.getElementById('psycho1').value = '';
+  document.getElementById('psycho2').value = '';
+  document.getElementById('affect1').value = '';
+  document.getElementById('affect2').value = '';
+  document.getElementById('affect3').value = '';
+  document.getElementById('affect4').value = '';
+  const tbody = document.querySelector('#resultTable tbody');
+  tbody.innerHTML = '';
+  addSubjectRow();
+  calculateGrades();
+}
 async function saveStudentResult() {
   const id = document.getElementById('studentID').value.trim();
   if (!id) { alert("Please enter a Student ID"); return; }
   const data = getCurrentResultData();
   await saveToGist(GIST_ID_RESULTS, id, data);
   alert(`Result saved for ${id}`);
-  showAutoSaveNotice();
   document.getElementById('studentID').value = '';
   clearResultForm();
+}
+async function loadStudentResult() {
+  const id = document.getElementById('studentID').value.trim();
+  if (!id) { alert("Please enter a Student ID"); return; }
+  const data = await loadFromGist(GIST_ID_RESULTS, id);
+  if (!data) { alert(`No result found for ${id}`); return; }
+  loadResultFromData(data);
+  calculateClassAverages(); // update averages after load
+}
+
+// Receipt functions
+function clearReceiptForm() {
+  document.getElementById('receiptName').value = '';
+  document.getElementById('receiptClass').value = '';
+  document.getElementById('receiptSession').value = '';
+  document.getElementById('receiptDate').value = '';
+  const tbody = document.querySelector('#receiptTable tbody');
+  tbody.innerHTML = '';
+  addReceiptRowInternal('', '0');
+  updateTotal();
 }
 async function saveReceipt() {
   const id = document.getElementById('receiptID').value.trim();
@@ -617,38 +703,318 @@ async function saveReceipt() {
   const data = getCurrentReceiptData();
   await saveToGist(GIST_ID_RECEIPTS, id, data);
   alert(`Receipt saved as ${id}`);
-  showAutoSaveNotice();
   document.getElementById('receiptID').value = '';
   clearReceiptForm();
 }
+async function loadReceipt() {
+  const id = document.getElementById('receiptID').value.trim();
+  if (!id) { alert("Please enter a Receipt ID"); return; }
+  const data = await loadFromGist(GIST_ID_RECEIPTS, id);
+  if (!data) { alert(`No receipt found for ${id}`); return; }
+  document.getElementById('receiptName').value = data.name || '';
+  document.getElementById('receiptClass').value = data.class || '';
+  document.getElementById('receiptTerm').value = data.term || '1st Term';
+  document.getElementById('receiptSession').value = data.session || '';
+  document.getElementById('receiptDate').value = data.date || '';
+  const tbody = document.querySelector('#receiptTable tbody');
+  tbody.innerHTML = '';
+  (data.items || []).forEach(item => addReceiptRowInternal(item.desc, item.amt));
+  updateTotal();
+}
 
-// Rest of your functions remain the same (load, images, calculations, etc.)
-// ... [All previous functions: loadStudentResult, loadReceipt, getCurrentResultData, etc. unchanged]
+// Result data
+function getCurrentResultData() {
+  const data = {
+    name: document.getElementById('resultName').value,
+    admNo: document.getElementById('resultAdmNo').value,
+    class: document.getElementById('resultClass').value,
+    noInClass: document.getElementById('resultNoInClass').value,
+    present: document.getElementById('resultPresent').value,
+    absent: document.getElementById('resultAbsent').value,
+    term: document.getElementById('termSelect').value,
+    subjects: [],
+    psycho: [document.getElementById('psycho1').value, document.getElementById('psycho2').value],
+    affect: [document.getElementById('affect1').value, document.getElementById('affect2').value,
+             document.getElementById('affect3').value, document.getElementById('affect4').value],
+    comment: document.getElementById('teacherComment').value
+  };
+  document.querySelectorAll('#resultTable tbody tr').forEach(row => {
+    const inputs = row.querySelectorAll('input.score');
+    data.subjects.push({
+      subject: row.cells[0].querySelector('input').value.trim(),
+      ca1: inputs[0].value,
+      ca2: inputs[1].value,
+      hw: inputs[2].value,
+      exam: inputs[3].value
+    });
+  });
+  return data;
+}
+function getCurrentReceiptData() {
+  const data = {
+    name: document.getElementById('receiptName').value,
+    class: document.getElementById('receiptClass').value,
+    term: document.getElementById('receiptTerm').value,
+    session: document.getElementById('receiptSession').value,
+    date: document.getElementById('receiptDate').value,
+    items: []
+  };
+  document.querySelectorAll('#receiptTable tbody tr').forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    data.items.push({desc: inputs[0].value, amt: inputs[1].value});
+  });
+  return data;
+}
+function loadResultFromData(data) {
+  document.getElementById('resultName').value = data.name || '';
+  document.getElementById('resultAdmNo').value = data.admNo || '';
+  document.getElementById('resultClass').value = data.class || '';
+  document.getElementById('resultNoInClass').value = data.noInClass || '';
+  document.getElementById('resultPresent').value = data.present || '';
+  document.getElementById('resultAbsent').value = data.absent || '';
+  document.getElementById('termSelect').value = data.term || '1st Term';
+  document.getElementById('psycho1').value = data.psycho?.[0] || '';
+  document.getElementById('psycho2').value = data.psycho?.[1] || '';
+  document.getElementById('affect1').value = data.affect?.[0] || '';
+  document.getElementById('affect2').value = data.affect?.[1] || '';
+  document.getElementById('affect3').value = data.affect?.[2] || '';
+  document.getElementById('affect4').value = data.affect?.[3] || '';
+  document.getElementById('teacherComment').value = data.comment || '';
+  const tbody = document.querySelector('#resultTable tbody');
+  tbody.innerHTML = '';
+  (data.subjects || []).forEach(sub => {
+    addSubjectRow(sub.subject, sub.ca1, sub.ca2, sub.hw, sub.exam);
+  });
+  if ((data.subjects || []).length === 0) addSubjectRow();
+  calculateGrades();
+}
 
-// Tab switching – restart auto-save on tab change
+// Subject rows
+function addSubjectRow(subject='', ca1='', ca2='', hw='', exam='') {
+  const tbody = document.getElementById('resultTable').querySelector('tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input value="${subject}"></td>
+    <td><input class="score" value="${ca1}"></td>
+    <td><input class="score" value="${ca2}"></td>
+    <td><input class="score" value="${hw}"></td>
+    <td><input class="score" value="${exam}"></td>
+    <td><input class="total" readonly></td>
+    <td><select class="grade" readonly>
+      <option>A+</option><option>A</option><option>B+</option><option>B</option>
+      <option>C+</option><option>C</option><option>D</option><option>F</option>
+    </select></td>
+    <td><select class="remark">
+      <option>Outstanding</option><option>Excellent</option><option>Very Good</option>
+      <option>Good</option><option>Average</option><option>Fair</option><option>Fail</option>
+    </select></td>
+    <td><button onclick="removeSubject(this)" class="small-btn">Remove</button></td>
+  `;
+  tbody.appendChild(tr);
+  tr.querySelectorAll('.score').forEach(inp => inp.addEventListener('input', () => { calculateGrades(); calculateClassAverages(); }));
+}
+function addSubject() { addSubjectRow(); }
+function removeSubject(btn) {
+  btn.closest('tr').remove();
+  calculateGrades();
+  calculateClassAverages();
+}
+function calculateGrades() {
+  document.querySelectorAll('#resultTable tbody tr').forEach(row => {
+    const scores = row.querySelectorAll('.score');
+    let total = 0;
+    scores.forEach(s => total += Number(s.value) || 0);
+    row.querySelector('.total').value = total;
+    const grade = getGrade(total);
+    row.querySelector('.grade').value = grade;
+    const remark = getRemark(total);
+    row.querySelector('.remark').value = remark;
+  });
+}
+function getGrade(score) {
+  if (score >= 95) return 'A+';
+  if (score >= 90) return 'A';
+  if (score >= 85) return 'B+';
+  if (score >= 75) return 'B';
+  if (score >= 70) return 'C+';
+  if (score >= 60) return 'C';
+  if (score >= 50) return 'D';
+  return 'F';
+}
+function getRemark(score) {
+  if (score >= 95) return 'Outstanding';
+  if (score >= 90) return 'Excellent';
+  if (score >= 85) return 'Very Good';
+  if (score >= 75) return 'Good';
+  if (score >= 60) return 'Average';
+  if (score >= 50) return 'Fair';
+  return 'Fail';
+}
+
+// Class averages
+async function calculateClassAverages() {
+  const currentClass = document.getElementById('resultClass').value.trim();
+  const currentTerm = document.getElementById('termSelect').value;
+  if (!currentClass || !currentTerm) {
+    clearAverages();
+    return;
+  }
+  const allResults = await loadAllResults();
+  const relevant = Object.values(allResults).filter(r => r.class === currentClass && r.term === currentTerm);
+  if (relevant.length === 0) {
+    clearAverages();
+    return;
+  }
+
+  // Build map of subject → arrays of scores
+  const subjectMap = {};
+  relevant.forEach(result => {
+    result.subjects.forEach(sub => {
+      const name = sub.subject.toUpperCase();
+      if (!subjectMap[name]) subjectMap[name] = {ca1:[], ca2:[], hw:[], exam:[], total:[]};
+      subjectMap[name].ca1.push(Number(sub.ca1)||0);
+      subjectMap[name].ca2.push(Number(sub.ca2)||0);
+      subjectMap[name].hw.push(Number(sub.hw)||0);
+      subjectMap[name].exam.push(Number(sub.exam)||0);
+      const tot = (Number(sub.ca1)||0) + (Number(sub.ca2)||0) + (Number(sub.hw)||0) + (Number(sub.exam)||0);
+      subjectMap[name].total.push(tot);
+    });
+  });
+
+  // Compute averages per current subject order
+  const rows = document.querySelectorAll('#resultTable tbody tr');
+  rows.forEach((row, idx) => {
+    const subj = row.cells[0].querySelector('input').value.trim().toUpperCase();
+    if (subjectMap[subj]) {
+      const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1) : '-';
+      document.getElementById('avgCA1').parentElement.parentElement.children[idx+1].querySelectorAll('td')[1].innerText = avg(subjectMap[subj].ca1);
+      // Note: we only update the cells that exist – simple approach
+    }
+  });
+
+  // Simple overall averages (shown only if subjects match)
+  const allCA1 = [], allCA2 = [], allHW = [], allExam = [], allTotal = [];
+  rows.forEach(row => {
+    const subj = row.cells[0].querySelector('input').value.trim().toUpperCase();
+    if (subjectMap[subj]) {
+      const avgObj = subjectMap[subj];
+      allCA1.push(...avgObj.ca1);
+      allCA2.push(...avgObj.ca2);
+      allHW.push(...avgObj.hw);
+      allExam.push(...avgObj.exam);
+      allTotal.push(...avgObj.total);
+    }
+  });
+  const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1) : '-';
+  document.getElementById('avgCA1').innerText = avg(allCA1);
+  document.getElementById('avgCA2').innerText = avg(allCA2);
+  document.getElementById('avgHW').innerText = avg(allHW);
+  document.getElementById('avgExam').innerText = avg(allExam);
+  document.getElementById('avgTotal').innerText = avg(allTotal);
+}
+function clearAverages() {
+  document.getElementById('avgCA1').innerText = '-';
+  document.getElementById('avgCA2').innerText = '-';
+  document.getElementById('avgHW').innerText = '-';
+  document.getElementById('avgExam').innerText = '-';
+  document.getElementById('avgTotal').innerText = '-';
+}
+
+// Receipt rows
+function addReceiptRowInternal(desc='', amt='0') {
+  const tbody = document.getElementById('receiptTable').querySelector('tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input value="${desc}"></td>
+    <td><input class="amt" type="number" value="${amt}" oninput="updateTotal()"></td>
+    <td><button onclick="removeReceiptRow(this)" class="small-btn">Remove</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+function addReceiptRow() {
+  if (!adminEnabled) return;
+  addReceiptRowInternal();
+}
+function removeReceiptRow(btn) {
+  btn.closest('tr').remove();
+  updateTotal();
+}
+function updateTotal() {
+  let total = 0;
+  document.querySelectorAll('#receiptTable .amt').forEach(inp => total += Number(inp.value) || 0);
+  document.getElementById('totalReceipt').value = total.toLocaleString();
+}
+function exportReceipt() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.table_to_sheet(document.getElementById('receiptTable'));
+  XLSX.utils.book_append_sheet(wb, ws, "Receipt");
+  XLSX.writeFile(wb, "School_Receipt.xlsx");
+}
+
+// Admin mode (unchanged except idle timer touches mobile)
+let adminEnabled = false;
+let idleTimer = null;
+const IDLE_TIMEOUT = 30 * 60 * 1000;
+function requestAdminAccess() {
+  const password = prompt("Enter Admin Password:");
+  if (password === 'admin123') enableAdminMode();
+  else alert("Incorrect password.");
+}
+function enableAdminMode() {
+  adminEnabled = true;
+  document.querySelectorAll('#receipt input, #receipt select, #receipt button:not(#adminBtn), #receipt .signature-upload input[type=file]').forEach(el => el.disabled = false);
+  document.getElementById('addEntryBtn').disabled = false;
+  alert("Admin mode enabled.");
+  resetIdleTimer();
+  document.addEventListener('mousemove', resetIdleTimer);
+  document.addEventListener('keydown', resetIdleTimer);
+  document.addEventListener('touchstart', resetIdleTimer);
+}
+function resetIdleTimer() {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (adminEnabled) {
+    idleTimer = setTimeout(() => {
+      adminEnabled = false;
+      document.querySelectorAll('#receipt input, #receipt select, #receipt button:not(#adminBtn), #receipt .signature-upload input[type=file]').forEach(el => el.disabled = true);
+      document.getElementById('addEntryBtn').disabled = true;
+      alert("Admin mode disabled due to inactivity.");
+    }, IDLE_TIMEOUT);
+  }
+}
+
+// Logo
+function previewLogo(e) {
+  const file = e.target.files[0];
+  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    localStorage.setItem(STORAGE_KEY_LOGO, ev.target.result);
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    document.querySelector('.school-logo').innerHTML = '';
+    document.querySelector('.school-logo').appendChild(img);
+  };
+  reader.readAsDataURL(file);
+}
+
+// Tab switching
 function showTab(event, id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   event.currentTarget.classList.add('active');
   if (id === 'result') calculateClassAverages();
-  startAutoSaveIfNeeded(); // ensure auto-save runs on active tab
 }
 
-// Initialize
+// Init
 loadImages();
 loadSchoolHeader();
 addSubjectRow();
 addReceiptRowInternal('', '0');
 calculateGrades();
 updateTotal();
-
-if (githubToken) {
-  startAutoSaveIfNeeded();
-  // Optional: alert('Auto-save enabled!');
-} else {
-  openSettings(); // prompt first time
-}
+if (githubToken) alert('GitHub token loaded – you can now save/load from anywhere!');
+else openSettings(); // prompt first time
 </script>
 </body>
 </html>
