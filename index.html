@@ -48,11 +48,29 @@ h1, h2, h3, .section-title {
   cursor: pointer;
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
 }
 .school-logo img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+.clear-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(255,0,0,0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  display: none;
+}
+.school-logo:hover .clear-btn, .signature-upload:hover .clear-btn {
+  display: block;
 }
 .school-info {
   flex: 1;
@@ -181,6 +199,19 @@ td input, td select {
   font-size: 18px;
   margin-top: 10px;
 }
+.summary-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+  padding: 15px;
+  background: #f0f0f0;
+  border-radius: 8px;
+  font-weight: bold;
+}
+.summary-box div {
+  text-align: center;
+}
 .footer {
   display: grid;
   grid-template-columns: 1fr;
@@ -208,6 +239,7 @@ td input, td select {
   cursor: pointer;
   overflow: hidden;
   background: #f9f9f9;
+  position: relative;
 }
 .signature-upload img {
   max-width: 90%;
@@ -241,8 +273,8 @@ button.load-btn {
   font-size: 12px;
   color: green;
   margin: 10px 0;
+  min-height: 20px;
 }
-
 /* Print Styles */
 @media print {
   @page {
@@ -254,15 +286,12 @@ button.load-btn {
     margin: 0;
     padding: 12mm;
   }
-  .tabs, .controls, .small-btn, .print-btn, #adminBtn, .auto-save-notice {
+  .tabs, .controls, .small-btn, .print-btn, #adminBtn, .auto-save-notice, .clear-btn, .summary-box {
     display: none !important;
   }
   .school-logo {
     width: 90px;
     height: 90px;
-  }
-  .school-info, .contact-line {
-    text-align: center;
   }
   .info-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -291,7 +320,6 @@ button.load-btn {
     font-size: 10pt !important;
   }
 }
-
 /* Mobile */
 @media (max-width: 767px) {
   .school-header {
@@ -312,7 +340,10 @@ button.load-btn {
 <div class="container">
   <!-- School Header -->
   <div class="school-header">
-    <div class="school-logo" onclick="document.getElementById('logoInput').click()">Upload Logo</div>
+    <div class="school-logo" onclick="document.getElementById('logoInput').click()">
+      <span style="color:#999;">Upload Logo</span>
+      <button class="clear-btn" onclick="clearImage(event, 'school-logo', STORAGE_KEY_LOGO)">×</button>
+    </div>
     <input type="file" id="logoInput" style="display:none" accept="image/*" onchange="previewLogo(event)">
     <div class="school-info">
       <h1 contenteditable="true" id="schoolName">ROYAL WUNDERKIND MODEL SCHOOL</h1>
@@ -348,7 +379,7 @@ button.load-btn {
       <div><label>Name<input id="resultName"></label></div>
       <div><label>Admission No<input id="resultAdmNo"></label></div>
       <div><label>Class<input id="resultClass"></label></div>
-      <div><label>No. in Class<input id="resultNoInClass"></label></div>
+      <div><label>No. in Class<input id="resultNoInClass" placeholder="e.g. 30"></label></div>
       <div><label>Times Present<input id="resultPresent"></label></div>
       <div><label>Times Absent<input id="resultAbsent"></label></div>
     </div>
@@ -369,8 +400,29 @@ button.load-btn {
           </tr>
         </thead>
         <tbody></tbody>
+        <tfoot>
+          <tr style="font-weight:bold; background:#f0f0f0;">
+            <td>Total Score</td>
+            <td colspan="4"></td>
+            <td><input id="grandTotal" readonly style="font-weight:bold;"></td>
+            <td colspan="3"></td>
+          </tr>
+          <tr style="font-weight:bold; background:#e0e0e0;">
+            <td>Average</td>
+            <td colspan="4"></td>
+            <td><input id="classAverage" readonly style="font-weight:bold;"></td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
       </table>
       <button onclick="addSubject()" class="small-btn">Add Subject</button>
+    </div>
+
+    <div class="summary-box">
+      <div>Total Obtainable: <span id="totalPossible">0</span></div>
+      <div>Total Score: <span id="totalScoreDisplay">0</span></div>
+      <div>Average: <span id="averageDisplay">0</span></div>
+      <div>Position: <input id="positionInClass" readonly placeholder="e.g. 1st" style="width:100px; font-weight:bold;"></div>
     </div>
 
     <div class="two-col">
@@ -398,12 +450,18 @@ button.load-btn {
     <div class="footer">
       <div>
         <strong>Class Teacher's Signature</strong>
-        <div class="signature-upload" onclick="document.getElementById('classSigInput').click()">Click to upload</div>
+        <div class="signature-upload" onclick="document.getElementById('classSigInput').click()">
+          <span style="color:#999;">Click to upload</span>
+          <button class="clear-btn" onclick="clearImage(event, this.parentElement, STORAGE_KEY_SIG_CLASS)">×</button>
+        </div>
         <input type="file" id="classSigInput" style="display:none" accept="image/*" onchange="previewSignature(event, this)">
       </div>
       <div>
         <strong>Head Teacher's Signature</strong>
-        <div class="signature-upload" onclick="document.getElementById('headSigInput').click()">Click to upload</div>
+        <div class="signature-upload" onclick="document.getElementById('headSigInput').click()">
+          <span style="color:#999;">Click to upload</span>
+          <button class="clear-btn" onclick="clearImage(event, this.parentElement, STORAGE_KEY_SIG_HEAD)">×</button>
+        </div>
         <input type="file" id="headSigInput" style="display:none" accept="image/*" onchange="previewSignature(event, this)">
       </div>
     </div>
@@ -440,23 +498,30 @@ button.load-btn {
         <tbody></tbody>
       </table>
     </div>
-
     <button onclick="addReceiptRow()" class="small-btn" id="addEntryBtn" disabled>Add Entry</button>
     <div class="total-box">TOTAL: ₦ <input id="totalReceipt" readonly style="width:150px; text-align:right; font-weight:bold;"></div>
 
     <div class="footer">
       <div>
         <strong>Finance Officer</strong>
-        <div class="signature-upload" onclick="document.getElementById('financeInput').click()">Click to upload</div>
+        <div class="signature-upload" onclick="document.getElementById('financeInput').click()">
+          <span style="color:#999;">Click to upload</span>
+          <button class="clear-btn" onclick="clearImage(event, this.parentElement, STORAGE_KEY_SIG_FINANCE)">×</button>
+        </div>
         <input type="file" id="financeInput" style="display:none" accept="image/*" onchange="previewSignature(event, this)" disabled>
       </div>
       <div>
         <strong>School Stamp</strong>
-        <div class="signature-upload" onclick="document.getElementById('stampInput').click()">Click to upload</div>
+        <div class="signature-upload" onclick="document.getElementById('stampInput').click()">
+          <span style="color:#999;">Click to upload</span>
+          <button class="clear-btn" onclick="clearImage(event, this.parentElement, STORAGE_KEY_SIG_STAMP)">×</button>
+        </div>
         <input type="file" id="stampInput" style="display:none" accept="image/*" onchange="previewSignature(event, this)" disabled>
       </div>
     </div>
   </div>
+
+  <div class="auto-save-notice" id="autoSaveNotice"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -472,6 +537,45 @@ const STORAGE_KEY_ADMIN_TIME = 'adminLastActive';
 let adminEnabled = false;
 let idleTimer = null;
 const IDLE_TIMEOUT = 30 * 60 * 1000;
+let autoSaveInterval = null;
+let lastSavedResultData = null;
+let lastSavedReceiptData = null;
+
+// Auto-save notice
+function showAutoSave(message = "Auto-saved") {
+  const notice = document.getElementById('autoSaveNotice');
+  notice.textContent = message + " at " + new Date().toLocaleTimeString();
+  clearTimeout(notice.hideTimer);
+  notice.hideTimer = setTimeout(() => notice.textContent = '', 3000);
+}
+
+// Auto-save logic
+function startAutoSave() {
+  if (autoSaveInterval) clearInterval(autoSaveInterval);
+  autoSaveInterval = setInterval(() => {
+    // Auto-save Result
+    const studentID = document.getElementById('studentID').value.trim();
+    if (studentID) {
+      const currentData = JSON.stringify(getCurrentResultData());
+      if (currentData !== lastSavedResultData) {
+        localStorage.setItem(`result_${studentID}`, currentData);
+        lastSavedResultData = currentData;
+        showAutoSave("Result auto-saved");
+      }
+    }
+
+    // Auto-save Receipt
+    const receiptID = document.getElementById('receiptID').value.trim();
+    if (receiptID) {
+      const currentReceiptData = JSON.stringify(getCurrentReceiptData());
+      if (currentReceiptData !== lastSavedReceiptData) {
+        localStorage.setItem(`receipt_${receiptID}`, currentReceiptData);
+        lastSavedReceiptData = currentReceiptData;
+        showAutoSave("Receipt auto-saved");
+      }
+    }
+  }, 10000); // Every 10 seconds
+}
 
 // School Header Save/Load
 function saveSchoolHeader() {
@@ -485,7 +589,6 @@ function saveSchoolHeader() {
   };
   localStorage.setItem(STORAGE_KEY_SCHOOL_INFO, JSON.stringify(info));
 }
-
 function loadSchoolHeader() {
   const saved = localStorage.getItem(STORAGE_KEY_SCHOOL_INFO);
   if (saved) {
@@ -505,8 +608,9 @@ function loadSchoolHeader() {
   if (el) el.addEventListener('blur', saveSchoolHeader);
 });
 
-// Clear form for new entry
+// Clear form
 function clearResultForm() {
+  document.getElementById('studentID').value = '';
   document.getElementById('resultName').value = '';
   document.getElementById('resultAdmNo').value = '';
   document.getElementById('resultClass').value = '';
@@ -520,42 +624,43 @@ function clearResultForm() {
   document.getElementById('affect2').value = '';
   document.getElementById('affect3').value = '';
   document.getElementById('affect4').value = '';
-
+  document.getElementById('positionInClass').value = '';
   const tbody = document.querySelector('#resultTable tbody');
   tbody.innerHTML = '';
   addSubjectRow();
   calculateGrades();
+  lastSavedResultData = null;
 }
 
 function clearReceiptForm() {
+  document.getElementById('receiptID').value = '';
   document.getElementById('receiptName').value = '';
   document.getElementById('receiptClass').value = '';
   document.getElementById('receiptSession').value = '';
   document.getElementById('receiptDate').value = '';
-
   const tbody = document.querySelector('#receiptTable tbody');
   tbody.innerHTML = '';
   addReceiptRowInternal('', '0');
   updateTotal();
+  lastSavedReceiptData = null;
 }
 
-// Save Student Result + Clear for new
+// Save functions
 function saveStudentResult() {
   const id = document.getElementById('studentID').value.trim();
   if (!id) { alert("Please enter a Student ID"); return; }
   localStorage.setItem(`result_${id}`, JSON.stringify(getCurrentResultData()));
+  lastSavedResultData = JSON.stringify(getCurrentResultData());
   alert(`Result saved for ${id}`);
-  document.getElementById('studentID').value = '';
   clearResultForm();
 }
 
-// Save Receipt + Clear for new
 function saveReceipt() {
   const id = document.getElementById('receiptID').value.trim();
   if (!id) { alert("Please enter a Receipt ID"); return; }
   localStorage.setItem(`receipt_${id}`, JSON.stringify(getCurrentReceiptData()));
+  lastSavedReceiptData = JSON.stringify(getCurrentReceiptData());
   alert(`Receipt saved as ${id}`);
-  document.getElementById('receiptID').value = '';
   clearReceiptForm();
 }
 
@@ -567,6 +672,7 @@ function loadStudentResult() {
   if (!saved) { alert(`No result found for ${id}`); return; }
   const data = JSON.parse(saved);
   loadResultFromData(data);
+  lastSavedResultData = JSON.stringify(data);
 }
 
 function loadReceipt() {
@@ -584,9 +690,10 @@ function loadReceipt() {
   tbody.innerHTML = '';
   data.items.forEach(item => addReceiptRowInternal(item.desc, item.amt));
   updateTotal();
+  lastSavedReceiptData = JSON.stringify(data);
 }
 
-// Result Data Functions
+// Data functions
 function getCurrentResultData() {
   const data = {
     name: document.getElementById('resultName').value,
@@ -600,7 +707,8 @@ function getCurrentResultData() {
     psycho: [document.getElementById('psycho1').value, document.getElementById('psycho2').value],
     affect: [document.getElementById('affect1').value, document.getElementById('affect2').value,
              document.getElementById('affect3').value, document.getElementById('affect4').value],
-    comment: document.getElementById('teacherComment').value
+    comment: document.getElementById('teacherComment').value,
+    position: document.getElementById('positionInClass').value
   };
   document.querySelectorAll('#resultTable tbody tr').forEach(row => {
     const inputs = row.querySelectorAll('input.score');
@@ -646,7 +754,7 @@ function loadResultFromData(data) {
   document.getElementById('affect3').value = data.affect?.[2] || '';
   document.getElementById('affect4').value = data.affect?.[3] || '';
   document.getElementById('teacherComment').value = data.comment || '';
-
+  document.getElementById('positionInClass').value = data.position || '';
   const tbody = document.querySelector('#resultTable tbody');
   tbody.innerHTML = '';
   (data.subjects || []).forEach(sub => {
@@ -656,40 +764,32 @@ function loadResultFromData(data) {
   calculateGrades();
 }
 
-// Subject Row & Calculations
+// Subject Row
 function addSubjectRow(subject='', ca1='', ca2='', hw='', exam='') {
   const tbody = document.getElementById('resultTable').querySelector('tbody');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input value="${subject}"></td>
-    <td><input class="score" value="${ca1}"></td>
-    <td><input class="score" value="${ca2}"></td>
-    <td><input class="score" value="${hw}"></td>
-    <td><input class="score" value="${exam}"></td>
+    <td><input class="score" value="${ca1}" type="number"></td>
+    <td><input class="score" value="${ca2}" type="number"></td>
+    <td><input class="score" value="${hw}" type="number"></td>
+    <td><input class="score" value="${exam}" type="number"></td>
     <td><input class="total" readonly></td>
     <td><select class="grade" readonly>
       <option>A+</option><option>A</option><option>B+</option><option>B</option>
       <option>C+</option><option>C</option><option>D</option><option>F</option>
     </select></td>
     <td><select class="remark">
-      <option>Outstanding</option>
-      <option>Excellent</option>
-      <option>Very Good</option>
-      <option>Good</option>
-      <option>Average</option>
-      <option>Fair</option>
-      <option>Fail</option>
+      <option>Outstanding</option><option>Excellent</option><option>Very Good</option>
+      <option>Good</option><option>Average</option><option>Fair</option><option>Fail</option>
     </select></td>
     <td><button onclick="removeSubject(this)" class="small-btn">Remove</button></td>
   `;
   tbody.appendChild(tr);
-
-  // Attach event listeners
   tr.querySelectorAll('.score').forEach(inp => inp.addEventListener('input', calculateGrades));
   const remarkSelect = tr.querySelector('.remark');
   remarkSelect.addEventListener('change', function() {
-    const selectedText = this.options[this.selectedIndex].text;
-    this.setAttribute('title', selectedText); // Show full text on hover
+    this.setAttribute('title', this.value);
   });
   calculateGrades();
 }
@@ -703,7 +803,11 @@ function removeSubject(btn) {
   calculateGrades();
 }
 
+// Grade & Average Calculation
 function calculateGrades() {
+  let grandTotal = 0;
+  let subjectCount = 0;
+
   document.querySelectorAll('#resultTable tbody tr').forEach(row => {
     const scores = row.querySelectorAll('.score');
     let total = 0;
@@ -711,16 +815,30 @@ function calculateGrades() {
     const totalField = row.querySelector('.total');
     const gradeSelect = row.querySelector('.grade');
     const remarkSelect = row.querySelector('.remark');
-
     totalField.value = total;
+    grandTotal += total;
+    subjectCount++;
+
     const grade = getGrade(total);
     gradeSelect.value = grade;
-
-    // Automatically set remark based on grade
     const remark = getRemark(total);
     remarkSelect.value = remark;
-    remarkSelect.setAttribute('title', remark); // Ensure full text is visible on hover
+    remarkSelect.setAttribute('title', remark);
   });
+
+  const avg = subjectCount > 0 ? (grandTotal / subjectCount).toFixed(2) : 0;
+
+  document.getElementById('grandTotal').value = grandTotal;
+  document.getElementById('classAverage').value = avg;
+  document.getElementById('totalScoreDisplay').textContent = grandTotal;
+  document.getElementById('averageDisplay').textContent = avg;
+  document.getElementById('totalPossible').textContent = subjectCount * 100;
+
+  // Position logic (simulated based on average)
+  const noInClass = parseInt(document.getElementById('resultNoInClass').value) || 1;
+  const position = Math.round((1 - (avg / 100)) * (noInClass - 1)) + 1;
+  const suffix = position === 1 ? 'st' : position === 2 ? 'nd' : position === 3 ? 'rd' : 'th';
+  document.getElementById('positionInClass').value = position + suffix;
 }
 
 function getGrade(score) {
@@ -772,14 +890,98 @@ function updateTotal() {
   document.getElementById('totalReceipt').value = total.toLocaleString();
 }
 
-function exportReceipt() {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.table_to_sheet(document.getElementById('receiptTable'));
-  XLSX.utils.book_append_sheet(wb, ws, "Receipt");
-  XLSX.writeFile(wb, "School_Receipt.xlsx");
+// Clear Image Function
+function clearImage(e, container, storageKey) {
+  e.stopPropagation();
+  localStorage.removeItem(storageKey);
+  container.innerHTML = `<span style="color:#999;">Click to upload</span><button class="clear-btn" onclick="clearImage(event, this.parentElement, '${storageKey}')">×</button>`;
+  if (storageKey === STORAGE_KEY_LOGO) {
+    container.innerHTML = `<span style="color:#999;">Upload Logo</span><button class="clear-btn" onclick="clearImage(event, this.parentElement, '${STORAGE_KEY_LOGO}')">×</button>`;
+  }
 }
 
-// Admin Mode
+// Image Functions
+function previewLogo(e) {
+  const file = e.target.files[0];
+  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    localStorage.setItem(STORAGE_KEY_LOGO, ev.target.result);
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    const container = document.querySelector('.school-logo');
+    container.innerHTML = '';
+    container.appendChild(img);
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'clear-btn';
+    clearBtn.innerHTML = '×';
+    clearBtn.onclick = (e) => clearImage(e, container, STORAGE_KEY_LOGO);
+    container.appendChild(clearBtn);
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewSignature(e, input) {
+  const file = e.target.files[0];
+  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const key = input.id === 'classSigInput' ? STORAGE_KEY_SIG_CLASS :
+                input.id === 'headSigInput' ? STORAGE_KEY_SIG_HEAD :
+                input.id === 'financeInput' ? STORAGE_KEY_SIG_FINANCE : STORAGE_KEY_SIG_STAMP;
+    localStorage.setItem(key, ev.target.result);
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    const container = input.parentElement.querySelector('.signature-upload');
+    container.innerHTML = '';
+    container.appendChild(img);
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'clear-btn';
+    clearBtn.innerHTML = '×';
+    clearBtn.onclick = (e) => clearImage(e, container, key);
+    container.appendChild(clearBtn);
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadImages() {
+  // Logo
+  const logo = localStorage.getItem(STORAGE_KEY_LOGO);
+  if (logo) {
+    const img = document.createElement('img');
+    img.src = logo;
+    const container = document.querySelector('.school-logo');
+    container.innerHTML = '';
+    container.appendChild(img);
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'clear-btn';
+    clearBtn.innerHTML = '×';
+    clearBtn.onclick = (e) => clearImage(e, container, STORAGE_KEY_LOGO);
+    container.appendChild(clearBtn);
+  }
+
+  // Signatures
+  ['classSigInput','headSigInput','financeInput','stampInput'].forEach(id => {
+    const key = id === 'classSigInput' ? STORAGE_KEY_SIG_CLASS :
+                id === 'headSigInput' ? STORAGE_KEY_SIG_HEAD :
+                id === 'financeInput' ? STORAGE_KEY_SIG_FINANCE : STORAGE_KEY_SIG_STAMP;
+    const data = localStorage.getItem(key);
+    if (data) {
+      const img = document.createElement('img');
+      img.src = data;
+      const container = document.getElementById(id).parentElement.querySelector('.signature-upload');
+      container.innerHTML = '';
+      container.appendChild(img);
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'clear-btn';
+      clearBtn.innerHTML = '×';
+      clearBtn.onclick = (e) => clearImage(e, container, key);
+      container.appendChild(clearBtn);
+    }
+  });
+}
+
+// Admin & Tab
 function requestAdminAccess() {
   const password = prompt("Enter Admin Password:");
   if (password === 'admin123') {
@@ -820,63 +1022,13 @@ function resetIdleTimer() {
   }
 }
 
-// Image Functions
-function previewLogo(e) {
-  const file = e.target.files[0];
-  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
-  const reader = new FileReader();
-  reader.onload = ev => {
-    localStorage.setItem(STORAGE_KEY_LOGO, ev.target.result);
-    const img = document.createElement('img');
-    img.src = ev.target.result;
-    document.querySelector('.school-logo').innerHTML = '';
-    document.querySelector('.school-logo').appendChild(img);
-  };
-  reader.readAsDataURL(file);
+function exportReceipt() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.table_to_sheet(document.getElementById('receiptTable'));
+  XLSX.utils.book_append_sheet(wb, ws, "Receipt");
+  XLSX.writeFile(wb, "School_Receipt.xlsx");
 }
 
-function previewSignature(e, input) {
-  const file = e.target.files[0];
-  if (!file || file.size > 5*1024*1024) { alert("File too large"); return; }
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const key = input.id === 'classSigInput' ? STORAGE_KEY_SIG_CLASS :
-                input.id === 'headSigInput' ? STORAGE_KEY_SIG_HEAD :
-                input.id === 'financeInput' ? STORAGE_KEY_SIG_FINANCE : STORAGE_KEY_SIG_STAMP;
-    localStorage.setItem(key, ev.target.result);
-    const img = document.createElement('img');
-    img.src = ev.target.result;
-    const container = input.parentElement.querySelector('.signature-upload');
-    container.innerHTML = '';
-    container.appendChild(img);
-  };
-  reader.readAsDataURL(file);
-}
-
-function loadImages() {
-  const logo = localStorage.getItem(STORAGE_KEY_LOGO);
-  if (logo) {
-    const img = document.createElement('img');
-    img.src = logo;
-    document.querySelector('.school-logo').innerHTML = '';
-    document.querySelector('.school-logo').appendChild(img);
-  }
-  ['classSigInput','headSigInput','financeInput','stampInput'].forEach(id => {
-    const key = id === 'classSigInput' ? STORAGE_KEY_SIG_CLASS :
-                id === 'headSigInput' ? STORAGE_KEY_SIG_HEAD :
-                id === 'financeInput' ? STORAGE_KEY_SIG_FINANCE : STORAGE_KEY_SIG_STAMP;
-    const data = localStorage.getItem(key);
-    if (data) {
-      const img = document.createElement('img');
-      img.src = data;
-      const container = document.getElementById(id).parentElement.querySelector('.signature-upload');
-      container.innerHTML = '';
-      container.appendChild(img);
-    }
-  });
-}
-
-// Tab switching
 function showTab(event, id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
@@ -891,6 +1043,7 @@ addSubjectRow();
 addReceiptRowInternal('', '0');
 calculateGrades();
 updateTotal();
+startAutoSave();
 </script>
 </body>
 </html>
