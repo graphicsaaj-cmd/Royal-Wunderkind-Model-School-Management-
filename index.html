@@ -11,7 +11,7 @@ const AUTO_SAVE_DELAY = 30000; // 30 seconds
 
 // Settings modal
 function openSettings() {
-  document.getElementById('githubToken').value = githubToken ? '••••••••••••••••' : '';
+  document.getElementById('githubToken').value = githubToken ? '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' : '';
   document.getElementById('settingsModal').style.display = 'flex';
 }
 function closeSettings() {
@@ -19,7 +19,7 @@ function closeSettings() {
 }
 function saveGitHubToken() {
   const token = document.getElementById('githubToken').value.trim();
-  if (token && token !== '••••••••••••••••') {
+  if (token && token !== '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') {
     githubToken = token;
     localStorage.setItem('githubToken', token);
     alert('GitHub token saved! Auto-save enabled.');
