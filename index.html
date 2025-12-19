@@ -308,16 +308,6 @@ button.load-btn {
 </head>
 <body>
 <div class="container">
-  <div class="controls" style="background:#eee; padding:10px; margin-bottom:20px;">
-    <h3>Cloud Sync (using GitHub Gist)</h3>
-    <p>To access your data from any device, configure a private GitHub Gist and a Personal Access Token (classic) with 'gist' scope.</p>
-    <input type="text" id="gistID" placeholder="Gist ID" style="width:300px;">
-    <input type="password" id="gistToken" placeholder="GitHub Token">
-    <button onclick="saveCloudConfig()" class="small-btn">Save Config</button>
-    <button onclick="loadFromCloud()" class="load-btn">Load from Cloud</button>
-    <button onclick="saveToCloud()" class="save-btn">Save to Cloud</button>
-    <p id="cloudStatus" style="color:green;"></p>
-  </div>
   <!-- School Header -->
   <div class="school-header">
     <div class="school-logo" onclick="document.getElementById('logoInput').click()">Upload Logo</div>
@@ -412,7 +402,7 @@ button.load-btn {
   <!-- RECEIPT TAB -->
   <div id="receipt" class="tab-content">
     <div class="controls">
-      <input type="text" id="receiptID" placeholder="Receipt ID (e.g. REC001)" style="width:۲۰۰px;">
+      <input type="text" id="receiptID" placeholder="Receipt ID (e.g. REC001)" style="width:200px;">
       <button onclick="saveReceipt()" class="save-btn">💾 Save & New</button>
       <button onclick="loadReceipt()" class="load-btn">📂 Load Receipt</button>
       <button onclick="window.print()" class="print-btn">🖨️ Print Receipt</button>
@@ -466,122 +456,6 @@ const STORAGE_KEY_ADMIN_TIME = 'adminLastActive';
 let adminEnabled = false;
 let idleTimer = null;
 const IDLE_TIMEOUT = 30 * 60 * 1000;
-
-const CLOUD_CONFIG_KEY = 'cloudConfig';
-let gistId = '';
-let gistToken = '';
-
-// Cloud functions
-function loadCloudConfig() {
-  const config = localStorage.getItem(CLOUD_CONFIG_KEY);
-  if (config) {
-    const c = JSON.parse(config);
-    gistId = c.id || '';
-    gistToken = c.token || '';
-    document.getElementById('gistID').value = gistId;
-    // token not shown for security
-  }
-}
-
-function saveCloudConfig() {
-  gistId = document.getElementById('gistID').value.trim();
-  const token = document.getElementById('gistToken').value.trim();
-  if (gistId && token) {
-    gistToken = token;
-    localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({id: gistId, token: gistToken}));
-    document.getElementById('gistToken').value = ''; // clear field
-    document.getElementById('cloudStatus').innerText = 'Config saved locally.';
-  } else {
-    alert('Please enter both Gist ID and Token');
-  }
-}
-
-async function getAllData() {
-  const data = {
-    schoolInfo: JSON.parse(localStorage.getItem(STORAGE_KEY_SCHOOL_INFO) || '{}'),
-    logo: localStorage.getItem(STORAGE_KEY_LOGO),
-    sigClass: localStorage.getItem(STORAGE_KEY_SIG_CLASS),
-    sigHead: localStorage.getItem(STORAGE_KEY_SIG_HEAD),
-    sigFinance: localStorage.getItem(STORAGE_KEY_SIG_FINANCE),
-    sigStamp: localStorage.getItem(STORAGE_KEY_SIG_STAMP),
-    results: {},
-    receipts: {}
-  };
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith('result_')) {
-      data.results[key.substring(7)] = localStorage.getItem(key);
-    } else if (key.startsWith('receipt_')) {
-      data.receipts[key.substring(8)] = localStorage.getItem(key);
-    }
-  }
-  return data;
-}
-
-async function applyAllData(data) {
-  if (data.schoolInfo && Object.keys(data.schoolInfo).length > 0) localStorage.setItem(STORAGE_KEY_SCHOOL_INFO, JSON.stringify(data.schoolInfo));
-  if (data.logo) localStorage.setItem(STORAGE_KEY_LOGO, data.logo);
-  if (data.sigClass) localStorage.setItem(STORAGE_KEY_SIG_CLASS, data.sigClass);
-  if (data.sigHead) localStorage.setItem(STORAGE_KEY_SIG_HEAD, data.sigHead);
-  if (data.sigFinance) localStorage.setItem(STORAGE_KEY_SIG_FINANCE, data.sigFinance);
-  if (data.sigStamp) localStorage.setItem(STORAGE_KEY_SIG_STAMP, data.sigStamp);
-  Object.entries(data.results || {}).forEach(([id, value]) => localStorage.setItem(`result_${id}`, value));
-  Object.entries(data.receipts || {}).forEach(([id, value]) => localStorage.setItem(`receipt_${id}`, value));
-  loadSchoolHeader();
-  loadImages();
-  document.getElementById('cloudStatus').innerText = 'Data loaded from cloud. Refreshing visuals...';
-  location.reload();
-}
-
-async function saveToCloud() {
-  if (!gistId || !gistToken) { alert('Configure Gist first.'); return; }
-  const data = await getAllData();
-  const content = JSON.stringify(data, null, 2);
-  const payload = { files: { "data.json": { content } } };
-  try {
-    const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-      method: 'PATCH',
-      headers: { 'Authorization': 'token ' + gistToken, 'Accept': 'application/vnd.github.v3+json' },
-      body: JSON.stringify(payload)
-    });
-    if (resp.ok) {
-      document.getElementById('cloudStatus').innerText = 'Saved to cloud!';
-    } else {
-      const err = await resp.json();
-      document.getElementById('cloudStatus').innerText = 'Error: ' + (err.message || resp.status);
-    }
-  } catch (e) {
-    document.getElementById('cloudStatus').innerText = 'Error: ' + e.message;
-  }
-}
-
-async function loadFromCloud() {
-  if (!gistId || !gistToken) { alert('Configure Gist first.'); return; }
-  try {
-    const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-      headers: { 'Authorization': 'token ' + gistToken, 'Accept': 'application/vnd.github.v3+json' }
-    });
-    if (resp.ok) {
-      const gist = await resp.json();
-      const file = gist.files['data.json'];
-      if (file && file.content) {
-        const data = JSON.parse(file.content);
-        await applyAllData(data);
-      } else {
-        alert('No data.json found in the Gist.');
-      }
-    } else {
-      const err = await resp.json();
-      document.getElementById('cloudStatus').innerText = 'Error: ' + (err.message || resp.status);
-    }
-  } catch (e) {
-    document.getElementById('cloudStatus').innerText = 'Error: ' + e.message;
-  }
-}
-
-// Existing functions (unchanged except minor fixes)...
-// ... (all your original script functions here - saveStudentResult, loadStudentResult, etc.)
-
 // School Header Save/Load
 function saveSchoolHeader() {
   const info = {
@@ -777,11 +651,12 @@ function addSubjectRow(subject='', ca1='', ca2='', hw='', exam='') {
     <td><button onclick="removeSubject(this)" class="small-btn">Remove</button></td>
   `;
   tbody.appendChild(tr);
+  // Attach event listeners
   tr.querySelectorAll('.score').forEach(inp => inp.addEventListener('input', calculateGrades));
   const remarkSelect = tr.querySelector('.remark');
   remarkSelect.addEventListener('change', function() {
     const selectedText = this.options[this.selectedIndex].text;
-    this.setAttribute('title', selectedText);
+    this.setAttribute('title', selectedText); // Show full text on hover
   });
   calculateGrades();
 }
@@ -803,9 +678,10 @@ function calculateGrades() {
     totalField.value = total;
     const grade = getGrade(total);
     gradeSelect.value = grade;
+    // Automatically set remark based on grade
     const remark = getRemark(total);
     remarkSelect.value = remark;
-    remarkSelect.setAttribute('title', remark);
+    remarkSelect.setAttribute('title', remark); // Ensure full text is visible on hover
   });
 }
 function getGrade(score) {
@@ -957,7 +833,6 @@ function showTab(event, id) {
 // Initialize
 loadImages();
 loadSchoolHeader();
-loadCloudConfig();
 addSubjectRow();
 addReceiptRowInternal('', '0');
 calculateGrades();
