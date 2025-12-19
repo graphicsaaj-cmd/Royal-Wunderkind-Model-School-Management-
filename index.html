@@ -249,7 +249,7 @@ td input, td select {
 .table-wrapper {
   overflow-x: auto;
 }
-button.small-btn, button.print-btn, button.save-btn, button.load-btn, button.generate-btn, button.clear-all-btn, button.backup-btn, button.restore-btn {
+button.small-btn, button.print-btn, button.save-btn, button.load-btn, button.generate-btn, button.clear-all-btn, button.backup-btn, button.restore-btn, button.calc-class-avg {
   padding: 8px 16px;
   margin: 5px 0;
   font-size: 14px;
@@ -263,6 +263,7 @@ button.generate-btn { background: #17a2b8; }
 button.clear-all-btn { background: #dc3545; }
 button.backup-btn { background: #28a745; }
 button.restore-btn { background: #ffc107; color: #212529; }
+button.calc-class-avg { background: #fd7e14; }
 button.print-btn {
   background: #28a745;
 }
@@ -279,7 +280,7 @@ button.load-btn {
   margin: 10px 0;
   min-height: 20px;
 }
-.extra-controls {
+.extra-controls, .class-avg-section {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -288,6 +289,21 @@ button.load-btn {
   padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
+}
+.class-avg-result {
+  width: 100%;
+  margin-top: 15px;
+  padding: 15px;
+  background: #e9ecef;
+  border-radius: 8px;
+  display: none;
+}
+.class-avg-result table {
+  margin: 10px 0;
+  font-size: 13px;
+}
+.class-avg-result th {
+  background: var(--purple);
 }
 /* Print Styles */
 @media print {
@@ -300,7 +316,7 @@ button.load-btn {
     margin: 0;
     padding: 12mm;
   }
-  .tabs, .controls, .small-btn, .print-btn, #adminBtn, .auto-save-notice, .clear-btn, .summary-box, .extra-controls {
+  .tabs, .controls, .small-btn, .print-btn, #adminBtn, .auto-save-notice, .clear-btn, .summary-box, .extra-controls, .class-avg-section {
     display: none !important;
   }
   .school-logo {
@@ -340,7 +356,7 @@ button.load-btn {
     flex-direction: column;
     text-align: center;
   }
-  .controls, .extra-controls {
+  .controls, .extra-controls, .class-avg-section {
     flex-direction: column;
   }
   button {
@@ -379,7 +395,7 @@ button.load-btn {
       <select id="classForID">
         <option value="">-- Select Class --</option>
         <optgroup label="Preschool">
-          <option value="RWPRS01">RWMSPRS 01</option>
+          <option value="RWPRS01">RWPRS 01</option>
         </optgroup>
         <optgroup label="Primary">
           <option value="RWMSPR001">RWMSPR 001</option>
@@ -547,12 +563,28 @@ button.load-btn {
     </div>
   </div>
 
-  <!-- Extra Controls (Clear, Backup, Restore) -->
+  <!-- Extra Controls -->
   <div class="extra-controls">
     <button onclick="clearAllData()" class="clear-all-btn">🗑️ Clear All Saved Data</button>
     <button onclick="backupData()" class="backup-btn">💾 Backup Data (Download)</button>
     <button onclick="document.getElementById('restoreInput').click()" class="restore-btn">📂 Restore Data</button>
     <input type="file" id="restoreInput" style="display:none" accept=".json" onchange="restoreData(event)">
+  </div>
+
+  <!-- Class Average Calculation Section -->
+  <div class="class-avg-section">
+    <h3 style="width:100%; margin:0 0 10px;">Class Average Calculation</h3>
+    <input type="text" id="classCodeInput" placeholder="Enter Class Code (e.g. RWMJSS1, RWPRS01)" style="width:250px;">
+    <button onclick="calculateClassAverage()" class="calc-class-avg">Calculate Class Average</button>
+    <div id="classAvgResult" class="class-avg-result">
+      <strong id="classAvgSummary"></strong>
+      <table id="classAvgTable">
+        <thead>
+          <tr><th>Student ID</th><th>Name</th><th>Average</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="auto-save-notice" id="autoSaveNotice"></div>
@@ -567,7 +599,7 @@ const STORAGE_KEY_SIG_FINANCE = 'sigFinance';
 const STORAGE_KEY_SIG_STAMP = 'sigStamp';
 const STORAGE_KEY_SCHOOL_INFO = 'schoolHeaderInfo';
 const STORAGE_KEY_ADMIN_TIME = 'adminLastActive';
-const STORAGE_KEY_COUNTERS = 'studentIdCounters'; // For unique counters per class
+const STORAGE_KEY_COUNTERS = 'studentIdCounters';
 let adminEnabled = false;
 let idleTimer = null;
 const IDLE_TIMEOUT = 30 * 60 * 1000;
@@ -622,7 +654,6 @@ function generateStudentID() {
   const seq = String(counters[classCode]).padStart(3, '0');
   const studentID = `${classCode}-${seq}`;
   document.getElementById('studentID').value = studentID;
-  // Auto-fill class in result form
   const classMap = {
     'RWPRS01': 'Preschool 01',
     'RWMSPR001': 'Primary 1', 'RWMSPR002': 'Primary 2', 'RWMSPR003': 'Primary 3',
@@ -631,6 +662,70 @@ function generateStudentID() {
     'RWMSSS1': 'SS 1', 'RWMSSS2': 'SS 2', 'RWMSSS3': 'SS 3'
   };
   document.getElementById('resultClass').value = classMap[classCode] || classCode;
+}
+
+// Class Average Calculation
+function calculateClassAverage() {
+  const classCode = document.getElementById('classCodeInput').value.trim().toUpperCase();
+  if (!classCode) {
+    alert("Please enter a class code.");
+    return;
+  }
+  const results = [];
+  let totalAvg = 0;
+  let count = 0;
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('result_')) {
+      const studentID = key.substring(7);
+      if (studentID.startsWith(classCode + '-')) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key));
+          let grandTotal = 0;
+          let subjectCount = data.subjects ? data.subjects.length : 0;
+          data.subjects.forEach(sub => {
+            grandTotal += Number(sub.ca1 || 0) + Number(sub.ca2 || 0) + Number(sub.hw || 0) + Number(sub.exam || 0);
+          });
+          const avg = subjectCount > 0 ? (grandTotal / subjectCount).toFixed(2) : 0;
+          results.push({id: studentID, name: data.name || 'Unnamed', avg: parseFloat(avg)});
+          totalAvg += parseFloat(avg);
+          count++;
+        } catch (e) {}
+      }
+    }
+  }
+
+  results.sort((a, b) => b.avg - a.avg);
+
+  const resultDiv = document.getElementById('classAvgResult');
+  const summary = document.getElementById('classAvgSummary');
+  const tbody = document.getElementById('classAvgTable').querySelector('tbody');
+  tbody.innerHTML = '';
+
+  if (count === 0) {
+    summary.textContent = `No students found for class code: ${classCode}`;
+    resultDiv.style.display = 'block';
+    return;
+  }
+
+  const classAverage = (totalAvg / count).toFixed(2);
+  summary.innerHTML = `<strong>${count}</strong> students found | Class Average: <strong>${classAverage}</strong>`;
+
+  results.forEach((res, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${res.id}</td><td>${res.name}</td><td>${res.avg} (${getPositionSuffix(idx + 1)})</td>`;
+    tbody.appendChild(tr);
+  });
+
+  resultDiv.style.display = 'block';
+}
+
+function getPositionSuffix(pos) {
+  if (pos % 10 === 1 && pos !== 11) return pos + 'st';
+  if (pos % 10 === 2 && pos !== 12) return pos + 'nd';
+  if (pos % 10 === 3 && pos !== 13) return pos + 'rd';
+  return pos + 'th';
 }
 
 // Backup & Restore
@@ -680,7 +775,7 @@ function clearAllData() {
   }
 }
 
-// School Header Save/Load
+// School Header Save/Load (unchanged)
 function saveSchoolHeader() {
   const info = {
     name: document.getElementById('schoolName').innerText.trim(),
@@ -709,7 +804,8 @@ function loadSchoolHeader() {
   if (el) el.addEventListener('blur', saveSchoolHeader);
 });
 
-// Clear form
+// The rest of the code (clear forms, save/load, subject rows, calculations, images, admin, etc.) remains exactly the same as in the previous version.
+
 function clearResultForm() {
   document.getElementById('studentID').value = '';
   document.getElementById('resultName').value = '';
@@ -745,7 +841,6 @@ function clearReceiptForm() {
   lastSavedReceiptData = null;
 }
 
-// Save functions
 function saveStudentResult() {
   const id = document.getElementById('studentID').value.trim();
   if (!id) { alert("Please enter or generate a Student ID"); return; }
@@ -763,7 +858,6 @@ function saveReceipt() {
   clearReceiptForm();
 }
 
-// Load functions
 function loadStudentResult() {
   const id = document.getElementById('studentID').value.trim();
   if (!id) { alert("Please enter a Student ID"); return; }
@@ -791,7 +885,6 @@ function loadReceipt() {
   lastSavedReceiptData = JSON.stringify(data);
 }
 
-// Data functions
 function getCurrentResultData() {
   const data = {
     name: document.getElementById('resultName').value,
@@ -860,7 +953,6 @@ function loadResultFromData(data) {
   calculateGrades();
 }
 
-// Subject Row
 function addSubjectRow(subject='', ca1='', ca2='', hw='', exam='') {
   const tbody = document.getElementById('resultTable').querySelector('tbody');
   const tr = document.createElement('tr');
@@ -897,7 +989,6 @@ function removeSubject(btn) {
   calculateGrades();
 }
 
-// Grade & Average Calculation
 function calculateGrades() {
   let grandTotal = 0;
   let subjectCount = 0;
@@ -948,7 +1039,6 @@ function getRemark(score) {
   return 'Fail';
 }
 
-// Receipt Functions
 function addReceiptRowInternal(desc='', amt='0') {
   const tbody = document.getElementById('receiptTable').querySelector('tbody');
   const tr = document.createElement('tr');
@@ -973,7 +1063,6 @@ function updateTotal() {
   document.getElementById('totalReceipt').value = total.toLocaleString();
 }
 
-// Image functions (unchanged)
 function clearImage(e, container, storageKey) {
   e.stopPropagation();
   localStorage.removeItem(storageKey);
@@ -1032,9 +1121,9 @@ function loadImages() {
     container.innerHTML = '';
     container.appendChild(img);
     const clearBtn = document.createElement('button');
-    clearBtn.className = 'clear-btn';
+    clearBtn.className = 'clear-clear-btn';
     clearBtn.innerHTML = '×';
-    CLEARbtn.onclick = (e) => clearImage(e, container, STORAGE_KEY_LOGO);
+    clearBtn.onclick = (e) => clearImage(e, container, STORAGE_KEY_LOGO);
     container.appendChild(clearBtn);
   }
   ['classSigInput','headSigInput','financeInput','stampInput'].forEach(id => {
@@ -1057,7 +1146,6 @@ function loadImages() {
   });
 }
 
-// Admin & Tab
 function requestAdminAccess() {
   const password = prompt("Enter Admin Password:");
   if (password === 'admin123') {
